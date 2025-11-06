@@ -3,7 +3,6 @@ import { Configuration, OpenAIApi } from "openai"
 import axios from "axios"
 import { Client, IntentsBitField } from "discord.js";
 
-
 // https://script.google.com/macros/s/AKfycbyT5XyWpHjbAb5gZsw3fMImWtxxQTqFO6-b5w5wYiaQaplt_f443lgVh7YrE7R_Uuoa/exec
 const SYS_API = process.env.GAS_URL
 
@@ -30,18 +29,48 @@ client.on("ready", async (args) => {
 client.on("messageCreate", async (msg) => {
     // console.log("msg!", msg.content)
     if (msg.author.bot) return
+
+    // X(Twitter) URL検出
+    const xUrlRegex = /(https?:\/\/(?:x\.com|twitter\.com)\/[^\s]+)/gi;
+    const urls = msg.content.match(xUrlRegex);
+
+    if (urls && urls.length > 0) {
+        for (const url of urls) {
+            try {
+                const res = await axios.get(url, {
+                    headers: { "User-Agent": "bot" }
+                });
+                const html = res.data;
+                console.log(html)
+                // og:descriptionタグがあるか判定
+                const ogTag = html.match(/property=["']og:description["']/i);
+                console.log(ogTag)
+                if (!ogTag) {
+                    // vxtwitter.comに置換
+                    const replaced = url.replace(/(?:x\.com|twitter\.com)/, "vxtwitter.com");
+                    const replacedMsg = msg.content.replace(url, replaced);
+                    msg.reply(replacedMsg);
+                    return;
+                }
+            } catch (e) {
+                // 取得失敗時もvxtwitter.comに置換
+                const replaced = url.replace(/(?:x\.com|twitter\.com)/, "vxtwitter.com");
+                const replacedMsg = msg.content.replace(url, replaced);
+                msg.reply(replacedMsg);
+                return;
+            }
+        }
+    }
+
     if (msg.channel.id !== process.env.DISCORD_CHANNEL) return
-
     if (msg.content.startsWith("!") || msg.content.startsWith("！")) return
-
+    
     if (msg.reference) {
         const replyChain = await getReplyChain(msg);
-        // msg.content = "発言者:" + nickname + " 発言内容:" +  msg.content
         const retult = await generateReplyWithRef([...replyChain, msg])
         msg.reply(retult)
         return
     }
-    // const result = await generateReply("発言者:" + nickname + " 発言内容:" +  msg.content)
     const result = await generateReply(msg.content)
     msg.reply(result);
 });
