@@ -1,7 +1,8 @@
-
 import { Configuration, OpenAIApi } from "openai"
 import axios from "axios"
 import { Client, IntentsBitField } from "discord.js";
+import { configDotenv } from "dotenv";
+configDotenv();
 
 // https://script.google.com/macros/s/AKfycbyT5XyWpHjbAb5gZsw3fMImWtxxQTqFO6-b5w5wYiaQaplt_f443lgVh7YrE7R_Uuoa/exec
 const SYS_API = process.env.GAS_URL
@@ -38,24 +39,21 @@ client.on("messageCreate", async (msg) => {
         for (const url of urls) {
             try {
                 const res = await axios.get(url, {
-                    headers: { "User-Agent": "bot" }
+                    headers: { "User-Agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)" }
                 });
                 const html = res.data;
-                console.log(html)
                 // og:descriptionタグがあるか判定
                 const ogTag = html.match(/property=["']og:description["']/i);
-                console.log(ogTag)
                 if (!ogTag) {
-                    // vxtwitter.comに置換
-                    const replaced = url.replace(/(?:x\.com|twitter\.com)/, "vxtwitter.com");
-                    const replacedMsg = msg.content.replace(url, replaced);
+                    // try vxtwitter first; if vxtwitter's OGP shows failure text, fallback to fxtwitter
+                    console.log("ogTag not found, trying vxtwitter/fxtwitter")
+                    const replacedMsg = await tryVxThenFx(url, msg.content)
                     msg.reply(replacedMsg);
                     return;
                 }
             } catch (e) {
-                // 取得失敗時もvxtwitter.comに置換
-                const replaced = url.replace(/(?:x\.com|twitter\.com)/, "vxtwitter.com");
-                const replacedMsg = msg.content.replace(url, replaced);
+                // 取得失敗時もvxtwitterに置換（ただしvxtwitterが "Failed to scan your link" を返す場合は fxtwitter に置換）
+                const replacedMsg = await tryVxThenFx(url, msg.content)
                 msg.reply(replacedMsg);
                 return;
             }
@@ -161,4 +159,36 @@ const generateReplyWithRef = async (prompt) => {
     const reply = completion.data.choices[0].message.content;
     console.log(reply.slice(0, 10), completion.data.usage.total_tokens)
     return reply
+}
+
+async function safeFetchHtml(url) {
+	try {
+		const { data } = await axios.get(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)" } });
+		return data;
+	} catch (err) {
+		return null;
+	}
+}
+
+async function tryVxThenFx(originalUrl, originalMsgContent) {
+	const vxtUrl = originalUrl.replace(/(?:x\.com|twitter\.com)/, "vxtwitter.com");
+	const vxtHtml = await safeFetchHtml(vxtUrl);
+
+    // いったん適当やけどまあ動くやろ
+    const vxfailed = vxtHtml.includes("Failed to scan your link! This may be due to an incorrect link")
+
+	if (vxfailed) {
+        console.log("vxtwitter fetch failed or link scan failed, falling back to fxtwitter")
+		const fxUrl = originalUrl.replace(/(?:x\.com|twitter\.com)/, "fxtwitter.com");
+		return originalMsgContent.replace(originalUrl, fxUrl);
+	}
+
+	if (vxtHtml.toLowerCase().includes("failed to scan your link")) {
+		const fxUrl = originalUrl.replace(/(?:x\.com|twitter\.com)/, "fxtwitter.com");
+		return originalMsgContent.replace(originalUrl, fxUrl);
+	}
+
+	// otherwise use vxtwitter
+    console.log("using vxtwitter")
+	return originalMsgContent.replace(originalUrl, vxtUrl);
 }
