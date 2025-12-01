@@ -6,6 +6,7 @@ configDotenv();
 
 // https://script.google.com/macros/s/AKfycbyT5XyWpHjbAb5gZsw3fMImWtxxQTqFO6-b5w5wYiaQaplt_f443lgVh7YrE7R_Uuoa/exec
 const SYS_API = process.env.GAS_URL
+const DISCORD_CHANNELS = (process.env.DISCORD_CHANNELS || '').split(',').map(id => id.trim()).filter(Boolean)
 
 const configuration = new Configuration({
     apiKey: process.env.OPENAI_API_KEY,
@@ -60,7 +61,7 @@ client.on("messageCreate", async (msg) => {
         }
     }
 
-    if (msg.channel.id !== process.env.DISCORD_CHANNEL) return
+    if (!DISCORD_CHANNELS.includes(msg.channel.id)) return
     if (msg.content.startsWith("!") || msg.content.startsWith("！")) return
     
     if (msg.reference) {
