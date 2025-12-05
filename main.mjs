@@ -102,8 +102,8 @@ const getSysPrompt = () => {
 }
 
 const getPromptTask = async () => {
-    const { data } = await axios.get(SYS_API)
-    sysprompt = data
+    // const { data } = await axios.get(SYS_API)
+    sysprompt = ""
 }
 
 setInterval(getPromptTask, 1000 * 60 )
@@ -193,3 +193,4 @@ async function tryVxThenFx(originalUrl, originalMsgContent) {
     console.log("using vxtwitter")
 	return originalMsgContent.replace(originalUrl, vxtUrl);
 }
+
