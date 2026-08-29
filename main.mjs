@@ -45,9 +45,11 @@ client.on("messageCreate", async (msg) => {
                 const html = res.data;
                 // og:descriptionタグがあるか判定
                 const ogTag = html.match(/property=["']og:description["']/i);
-                if (!ogTag) {
+                // R18/年齢制限コンテンツはog:descriptionはあるがログイン要求ページが返る
+                const ageRestricted = typeof html === "string" && html.includes("Age-restricted adult content");
+                if (!ogTag || ageRestricted) {
                     // try vxtwitter first; if vxtwitter's OGP shows failure text, fallback to fxtwitter
-                    console.log("ogTag not found, trying vxtwitter/fxtwitter")
+                    console.log(ageRestricted ? "age-restricted page detected, trying vxtwitter/fxtwitter" : "ogTag not found, trying vxtwitter/fxtwitter")
                     const replacedMsg = await tryVxThenFx(url, msg.content)
                     msg.reply(replacedMsg);
                     return;
@@ -174,6 +176,13 @@ async function safeFetchHtml(url) {
 async function tryVxThenFx(originalUrl, originalMsgContent) {
 	const vxtUrl = originalUrl.replace(/(?:x\.com|twitter\.com)/, "vxtwitter.com");
 	const vxtHtml = await safeFetchHtml(vxtUrl);
+
+	// vxtwitter自体が取得できなかった場合はfxtwitterにフォールバック
+	if (!vxtHtml) {
+		console.log("vxtwitter fetch returned nothing, falling back to fxtwitter")
+		const fxUrl = originalUrl.replace(/(?:x\.com|twitter\.com)/, "fxtwitter.com");
+		return originalMsgContent.replace(originalUrl, fxUrl);
+	}
 
     // いったん適当やけどまあ動くやろ
     const vxfailed = vxtHtml.includes("Failed to scan your link! This may be due to an incorrect link")
